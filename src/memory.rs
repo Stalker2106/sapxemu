@@ -1,9 +1,14 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::bus::{Bus, BusReader, BusWriter};
+use crate::{bus::{Bus, BusReader, BusWriter}, clock::ClockDriven, controller::FlaggableIC, register::RORegister};
+
+// RAM flags
+pub const RAM_RI: u8 = 0b00000001; // RAM draw from bus
+pub const RAM_RO: u8 = 0b00000001; // RAM writes to bus
 
 // RAM
 pub struct RAM {
+    flags: u8,
     memory: Vec<u8>,
     mar: Rc<RefCell<RORegister>>,
 }
@@ -18,6 +23,7 @@ impl RAM {
             vec![0b00000000; 256]
         };
         Self {
+            flags: 0,
             memory: mem,
             mar
         }
@@ -36,50 +42,26 @@ impl BusWriter for RAM {
     }
 }
 
-// RORegister
-pub struct RORegister {
-    value: u8,
-}
-
-impl RORegister {
-    pub fn new() -> Self {
-        Self { value: 0 }
+impl FlaggableIC for RAM {
+    fn set_flag(&mut self, flag_mask: u8, state: bool) {
+        if state {
+            self.flags |= flag_mask;
+        } else {
+            self.flags &= !flag_mask;
+        }
     }
 
-    pub fn read(&self) -> u8 {
-        return self.value;
-    }
-}
-
-impl BusReader for RORegister {
-    fn read_from_bus(&mut self, bus: &Bus) {
-        self.value = bus.read();
+    fn get_flag(&mut self, flag_mask: u8) -> bool {
+        return self.flags & flag_mask != 0;
     }
 }
 
-// RWRegister
-pub struct RWRegister {
-    value: u8,
-}
-
-impl RWRegister {
-    pub fn new() -> Self {
-        Self { value: 0 }
-    }
-
-    pub fn read(&self) -> u8 {
-        return self.value;
-    }
-}
-
-impl BusReader for RWRegister {
-    fn read_from_bus(&mut self, bus: &Bus) {
-        self.value = bus.read();
-    }
-}
-
-impl BusWriter for RWRegister {
-    fn write_to_bus(&self, bus: &mut Bus) {
-        bus.write(self.value);
+impl ClockDriven for RAM {
+    fn on_clock_pulse(&mut self, bus: &mut Bus) {
+        if self.get_flag(RAM_RI) {
+            self.read_from_bus(bus);
+        } else if self.get_flag(RAM_RO) {
+            self.write_to_bus(bus);
+        }
     }
 }

@@ -4,9 +4,10 @@ use std::{
     time::Duration,
 };
 
+use crate::bus::Bus;
+
 pub struct Clock {
     frequency: usize,                // Hertz
-    state: bool,                     // Current clock state
     running: Arc<Mutex<bool>>,       // Shared running state
     thread_handle: Option<JoinHandle<()>>, // Handle to the clock thread
 }
@@ -15,7 +16,6 @@ impl Clock {
     pub fn new(frequency: usize) -> Self {
         Self {
             frequency,
-            state: false,
             running: Arc::new(Mutex::new(false)), // Initially paused
             thread_handle: None,
         }
@@ -66,4 +66,8 @@ impl Clock {
     pub fn is_running(&self) -> bool {
         *self.running.lock().unwrap()
     }
+}
+
+pub trait ClockDriven {
+    fn on_clock_pulse(&mut self, bus: &mut Bus);
 }

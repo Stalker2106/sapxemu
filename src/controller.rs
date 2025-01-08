@@ -1,10 +1,10 @@
 use std::{cell::RefCell, process::exit, rc::Rc, sync::mpsc};
 
-use crate::{alu::ALU, bus::{Bus, BusReader, BusWriter}, clock::Clock, memory::{RORegister, RWRegister, RAM}, ProgramCounter};
+use crate::{alu::{ALUSignal, ALU}, bus::Bus, clock::{Clock, ClockDriven}, memory::{RAM, RAM_RI, RAM_RO}, pc::{PC_IN, PC_INCR, PC_OUT}, register::{RORegister, RWRegister, REG_IN, REG_OUT}, ProgramCounter};
 
 // Decoder
 
-fn decode_instruction(instruction: u8) -> Vec<Vec<&'static str>> {
+fn decode_instruction(instruction: u8) -> Vec<Vec<String>> {
     match instruction {
         0b0000 => {
             // NOP: No Operation
@@ -14,24 +14,24 @@ fn decode_instruction(instruction: u8) -> Vec<Vec<&'static str>> {
         0b0001 => {
             // LDA: Load A
             return vec![
-                vec!["CO","MI"],
-                vec!["RO","AI"]
+                vec!["CO".to_string(), "MI".to_string()],
+                vec!["RO".to_string(), "AI".to_string()]
             ];
         }
         0b0010 => {
             // ADD: Add
             return vec![
-                vec!["CO","MI"],
-                vec!["RO","BI"],
-                vec!["EO","AI"]
+                vec!["CO".to_string(), "MI".to_string()],
+                vec!["RO".to_string(), "BI".to_string()],
+                vec!["EO".to_string(), "AI".to_string()]
             ];
         }
         0b0011 => {
             // SUB: Subtract
             return vec![
-                vec!["CO","MI"],
-                vec!["RO","BI"],
-                vec!["SU","AI"]
+                vec!["CO".to_string(), "MI".to_string()],
+                vec!["RO".to_string(), "BI".to_string()],
+                vec!["SU".to_string(), "AI".to_string()]
             ];
         }
         0b0100 => {
@@ -40,11 +40,11 @@ fn decode_instruction(instruction: u8) -> Vec<Vec<&'static str>> {
         }
         0b0101 => {
             // OUT: Output
-            return vec![vec!["AO","OI"]];
+            return vec![vec!["AO".to_string(), "OI".to_string()]];
         }
         0b0110 => {
             // HLT: Halt
-            return vec![vec!["HLT"]];
+            return vec![vec!["HLT".to_string()]];
         }
         _ => {
             println!("Unknown instruction: {:04b}", instruction);
@@ -53,13 +53,55 @@ fn decode_instruction(instruction: u8) -> Vec<Vec<&'static str>> {
     }
 }
 
+// Sequencer
+pub struct Sequencer {
+    fetch_microcode: Vec<Vec<String>>,
+    instruction_microcode: Vec<Vec<String>>,
+    microcode_step: u8
+}
+
+impl Sequencer {
+    pub fn new() -> Self {
+        Self {
+            fetch_microcode: vec![
+                vec!["CO".to_string(), "MI".to_string()],
+                vec!["RO".to_string(), "II".to_string()],
+                vec!["CE".to_string()],
+            ],
+            instruction_microcode: Vec::new(),
+            microcode_step: 0,
+        }
+    }
+
+    pub fn get_current_step_controls(&self) -> Vec<String> {
+        if self.microcode_step < self.fetch_microcode.len() as u8 {
+            return self.fetch_microcode[self.microcode_step as usize].clone();
+        } else {
+            let rstep = self.microcode_step as usize - self.fetch_microcode.len();
+            if rstep < self.instruction_microcode.len() {
+                return self.instruction_microcode[rstep].clone();
+            }
+        }
+        return vec![]
+    }
+
+    pub fn increment_step(&mut self, ir: &mut RWRegister) {
+        self.microcode_step += 1;
+        // Handle instruction decoding when fetch is over
+        if self.microcode_step == self.fetch_microcode.len() as u8 {
+            self.instruction_microcode = decode_instruction(ir.read());
+        }
+        // Handle cycle end
+        if self.microcode_step as usize >= (self.fetch_microcode.len() + self.instruction_microcode.len()) {
+            self.microcode_step = 0;
+        }
+    }
+}
+
 // Controller
 pub struct Controller<'a> {
-    fetch_microcode: Vec<Vec<&'a str>>,
-    instruction_microcode: Vec<Vec<&'a str>>,
-    microcode_step: u8,
-    // Links
     clock: &'a mut Clock,
+    sequencer: Sequencer,
     pc: &'a mut ProgramCounter,
     reg_a: Rc<RefCell<RWRegister>>,
     reg_b: Rc<RefCell<RWRegister>>,
@@ -85,15 +127,8 @@ impl<'a> Controller<'a> {
         reg_out: Rc<RefCell<RORegister>>,
     ) -> Self {
         Self {
-            fetch_microcode: vec![
-                vec!["CO", "MI"],
-                vec!["RO", "II"],
-                vec!["CE"],
-            ],
-            instruction_microcode: Vec::new(),
-            microcode_step: 0,
-            // Links
             clock,
+            sequencer: Sequencer::new(),
             pc,
             reg_a,
             reg_b,
@@ -112,7 +147,14 @@ impl<'a> Controller<'a> {
         loop {
             match rx.recv() {
                 Ok(_) => {
-                    self.on_clock_tick();
+                    self.print_state();
+                    self.on_clock_pulse();
+                    self.pc.on_clock_pulse(self.bus);
+                    self.mar.borrow_mut().on_clock_pulse(self.bus);
+                    self.ir.on_clock_pulse(self.bus);
+                    self.reg_a.borrow_mut().on_clock_pulse(self.bus);
+                    self.reg_b.borrow_mut().on_clock_pulse(self.bus);
+                    self.reg_out.borrow_mut().on_clock_pulse(self.bus);
                 }
                 Err(_) => {
                     println!("Clock thread has stopped. Exiting main loop.");
@@ -122,40 +164,29 @@ impl<'a> Controller<'a> {
         }
     }
 
+    pub fn print_state(&self) {
+        println!("BUS: {:08b}", self.bus.read());
+        println!("PC: {:08b}", self.pc.spy());
+    }
 
-    pub fn on_clock_tick(&mut self) {
-        if self.microcode_step < self.fetch_microcode.len() as u8 {
-            let step_signals = self.fetch_microcode[self.microcode_step as usize].clone();
-            // Raise all step signals
-            for signal in step_signals {
-                self.control(&signal);
-            }
-            // Increment microcode step
-            self.microcode_step += 1;
-            // Decode when fetch is over
-            if self.microcode_step == self.fetch_microcode.len() as u8 {
-                self.instruction_microcode = decode_instruction(self.ir.read());
-            }
-        } else {
-            let rstep = self.microcode_step as usize - self.fetch_microcode.len();
-            // Execute instruction microcode
-            if rstep < self.instruction_microcode.len() {
-                let step_signals = self.instruction_microcode[rstep].clone();
-                // Raise all step signals
-                for signal in step_signals {
-                    self.control(&signal);
-                }
-            }
-            // Increment microcode step
-            self.microcode_step += 1;
-            // Handle reaching end of cycle
-            if self.microcode_step as usize >= (self.fetch_microcode.len() + self.instruction_microcode.len()) {
-                self.microcode_step = 0;
-            }
+    pub fn set_step_controls(&mut self, microcode_step: Vec<String>, state: bool) {
+        for signal in microcode_step {
+            self.set_control(&signal, state);
         }
     }
 
-    fn control(&mut self, signal: &str) {
+    pub fn on_clock_pulse(&mut self) {
+        // Drive Prev step controls low
+        let prev_step_controls = self.sequencer.get_current_step_controls();
+        self.set_step_controls(prev_step_controls, false);
+        // Run current step
+        let step_controls = self.sequencer.get_current_step_controls();
+        self.set_step_controls(step_controls, true);
+        // Increment microcode step
+        self.sequencer.increment_step(self.ir);
+    }
+
+    fn set_control(&mut self, signal: &str, state: bool) {
         match signal {
             "HLT" => {
                 // Halt the computer
@@ -163,64 +194,63 @@ impl<'a> Controller<'a> {
             }
             "MI" => {
                 // Memory address register in
-                self.mar.borrow_mut().read_from_bus(self.bus);
+                self.mar.borrow_mut().set_flag(REG_IN, state);
             }
             "RI" => {
                 // RAM in
-                self.ram.read_from_bus(self.bus);
+                self.ram.set_flag(RAM_RI, state);
             }
             "RO" => {
                 // RAM out
-                self.ram.write_to_bus(self.bus);
+                self.ram.set_flag(RAM_RO, state);
             }
             "II" => {
                 // Instruction register in
-                self.ir.read_from_bus(self.bus);
+                self.ir.set_flag(REG_IN, state);
             }
             "IO" => {
                 // Instruction register out (not needed with 256B RAM mod)
-                self.ir.write_to_bus(self.bus);
+                self.ir.set_flag(REG_OUT, state);
             }
             "AI" => {
                 // Register A in
-                self.reg_a.borrow_mut().read_from_bus(self.bus);
+                self.reg_a.borrow_mut().set_flag(REG_IN, state);
             }
             "AO" => {
                 // Register A out
-                self.reg_a.borrow().write_to_bus(self.bus);
+                self.reg_a.borrow_mut().set_flag(REG_OUT, state);
             }
             "EO" => {
                 // ALU sum out
-                self.alu.write_to_bus(self.bus);
+                if state { self.alu.signal(ALUSignal::EO, self.bus) };
             }
             "SU" => {
                 // ALU Subtract
-                //NOTE: IMPLEM SUB
-                self.alu.write_to_bus(self.bus);
+                if state { self.alu.signal(ALUSignal::SU, self.bus) };
             }
             "BI" => {
                 // Register B in
-                self.reg_b.borrow_mut().read_from_bus(self.bus);
+                self.reg_b.borrow_mut().set_flag(REG_IN, state);
             }
             "BO" => {
-                // Register B in
-                self.reg_b.borrow().write_to_bus(self.bus);
+                // Register B out
+                self.reg_b.borrow_mut().set_flag(REG_OUT, state);
             }
             "OI" => {
                 // Output in
-                self.reg_out.borrow_mut().read_from_bus(self.bus);
+                self.reg_out.borrow_mut().set_flag(REG_IN, state);
             }
             "CE" => {
                 // Counter enable
-                self.pc.increment();
+                self.pc.set_flag(PC_INCR, state);
             }
             "CO" => {
                 // Counter out
-                self.pc.write_to_bus(self.bus);
+                self.pc.set_flag(PC_OUT, state);
             }
             "J" => {
                 // Jump (Counter in)
-                self.pc.read_from_bus(self.bus);
+                self.pc.set_flag(PC_IN, state);
             }
             "FI" => {
                 // Flags register in
@@ -231,4 +261,9 @@ impl<'a> Controller<'a> {
         }
     }
 
+}
+
+pub trait FlaggableIC {
+    fn set_flag(&mut self, flag_mask: u8, state: bool);
+    fn get_flag(&mut self, flag_mask: u8) -> bool;
 }

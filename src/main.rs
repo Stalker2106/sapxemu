@@ -1,17 +1,19 @@
-use std::{cell::RefCell, env, fs, rc::Rc, sync::mpsc};
+use std::{cell::RefCell, env, fs, rc::Rc};
 
 use alu::ALU;
 use bus::Bus;
 use clock::Clock;
 use controller::Controller;
-use memory::{RORegister, RWRegister, RAM};
+use memory::RAM;
 use pc::ProgramCounter;
+use register::{RORegister, RWRegister};
 
 
 mod bitset;
 mod bus;
 mod clock;
 mod controller;
+mod register;
 mod memory;
 mod pc;
 mod alu;

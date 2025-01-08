@@ -1,6 +1,12 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{bus::{Bus, BusWriter}, memory::RWRegister};
+use crate::{bus::Bus, register::RWRegister};
+
+// ALU signals
+pub enum ALUSignal {
+    EO, // Sum out to bus
+    SU, // Sub out to bus
+}
 
 pub struct ALU {
     reg_a: Rc<RefCell<RWRegister>>,
@@ -14,9 +20,16 @@ impl ALU {
             reg_b
         }
     }
-}
 
-impl BusWriter for ALU {
-    fn write_to_bus(&self, bus: &mut Bus) {
+    pub fn signal(&self, signal: ALUSignal, bus: &mut Bus) {
+        match signal {
+            ALUSignal::EO => {
+                bus.write(self.reg_a.borrow().read() + self.reg_b.borrow().read());
+            },
+            ALUSignal::SU => {
+                bus.write(self.reg_a.borrow().read() - self.reg_b.borrow().read());
+            }
+        }
     }
 }
+
