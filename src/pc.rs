@@ -1,63 +1,44 @@
-use crate::{bus::{Bus, BusReader, BusWriter}, clock::ClockDriven, controller::FlaggableIC};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-// PC flags
-pub const PC_OUT: u8 = 0b00000001; // draws from bus
-pub const PC_IN: u8 = 0b00000010; // writes to bus
-pub const PC_INCR: u8 = 0b00000011; // increments
+use bit_vec::BitVec;
+
+use crate::{bitvecutils::increment_bitset, bus::Bus, clock::ClockDriven, config::{OPCODE_SIZE, WORD_SIZE}, control::ControlLine, link::Link};
 
 // Program Counter
 pub struct ProgramCounter {
-    flags: u8,
-    address: u8,
+    control_links: HashMap<ControlLine, Rc<RefCell<Link>>>,
+    bus: Rc<RefCell<Bus>>,
+    address: BitVec,
 }
 
-impl ProgramCounter {
-    pub fn new() -> Self {
+impl<'a> ProgramCounter {
+    pub fn new(all_control_links: &'a HashMap<ControlLine, Rc<RefCell<Link>>>, bus: Rc<RefCell<Bus>>) -> Self {
+        let mut control_eps = HashMap::new();
+        control_eps.insert(ControlLine::CO, Rc::clone(&all_control_links[&ControlLine::CO]));
+        control_eps.insert(ControlLine::J, Rc::clone(&all_control_links[&ControlLine::J]));
+        control_eps.insert(ControlLine::CE, Rc::clone(&all_control_links[&ControlLine::CE]));
         Self {
-            flags: 0,
-            address: 0
+            control_links: control_eps,
+            bus,
+            address: BitVec::from_elem(WORD_SIZE - OPCODE_SIZE, false)
         }
     }
 
-    pub fn spy(&self) -> u8 {
-        return self.address;
-    }
-}
-
-impl BusReader for ProgramCounter {
-    fn read_from_bus(&mut self, bus: &Bus) {
-        self.address = bus.read();
-    }
-}
-
-impl BusWriter for ProgramCounter {
-    fn write_to_bus(&self, bus: &mut Bus) {
-        bus.write(self.address);
-    }
-}
-
-impl FlaggableIC for ProgramCounter {
-    fn set_flag(&mut self, flag_mask: u8, state: bool) {
-        if state {
-            self.flags |= flag_mask;
-        } else {
-            self.flags &= !flag_mask;
-        }
-    }
-
-    fn get_flag(&mut self, flag_mask: u8) -> bool {
-        return self.flags & flag_mask != 0;
+    pub fn read(&self) -> BitVec {
+        return self.address.clone();
     }
 }
 
 impl ClockDriven for ProgramCounter {
-    fn on_clock_pulse(&mut self, bus: &mut Bus) {
-        if self.get_flag(PC_IN) {
-            self.read_from_bus(bus);
-        } else if self.get_flag(PC_OUT) {
-            self.write_to_bus(bus);
-        } else if self.get_flag(PC_INCR) {
-            self.address += 1;
+    fn on_clock_pulse(&mut self) {
+        if self.control_links[&ControlLine::CO].borrow().get_state() {
+            self.bus.borrow_mut().write(&self.address);
+        }
+        if self.control_links[&ControlLine::J].borrow().get_state() {
+            self.address = self.bus.borrow().read();
+        }
+        if self.control_links[&ControlLine::CE].borrow().get_state() {
+            increment_bitset(&mut self.address);
         }
     }
 }

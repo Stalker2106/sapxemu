@@ -4,8 +4,6 @@ use std::{
     time::Duration,
 };
 
-use crate::bus::Bus;
-
 pub struct Clock {
     frequency: usize,                // Hertz
     running: Arc<Mutex<bool>>,       // Shared running state
@@ -39,7 +37,7 @@ impl Clock {
             let interval = Duration::from_millis(1000 / frequency as u64);
 
             while *running.lock().unwrap() {
-                println!("Clock pulse!");
+                println!("####");
                 // Send a signal to the main thread
                 if tx.send(()).is_err() {
                     println!("Main thread disconnected. Clock thread exiting.");
@@ -49,25 +47,8 @@ impl Clock {
             }
         }));
     }
-
-    pub fn pause(&mut self) {
-        if let Some(handle) = self.thread_handle.take() {
-            // Set the running flag to false
-            *self.running.lock().unwrap() = false;
-
-            // Wait for the thread to finish
-            handle.join().unwrap();
-            println!("Clock paused.");
-        } else {
-            println!("Clock is not running.");
-        }
-    }
-
-    pub fn is_running(&self) -> bool {
-        *self.running.lock().unwrap()
-    }
 }
 
 pub trait ClockDriven {
-    fn on_clock_pulse(&mut self, bus: &mut Bus);
+    fn on_clock_pulse(&mut self);
 }
