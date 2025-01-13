@@ -10,7 +10,7 @@ pub enum BusSelector {
 
 // Shared Bus
 pub struct Bus {
-    data: BitVec,
+    pub data: BitVec,
 }
 
 impl Bus {

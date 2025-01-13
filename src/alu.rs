@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use bit_vec::BitVec;
 
-use crate::{bus::Bus, control::ControlLine, link::Link, register::RWRegister};
+use crate::{bus::Bus, control::control::ControlLine, link::Link, memory::register::RWRegister};
 
 fn sum_bitvecs(a: &BitVec, b: &BitVec) -> BitVec {
     let mut result = BitVec::new();

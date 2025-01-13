@@ -1,10 +1,9 @@
 use bit_vec::BitVec;
 
-
 pub fn get_bitvec_subset(bitvec: &BitVec, position: usize, size: usize) -> BitVec {
     // Ensure the position and size are valid
     if position + size > bitvec.len() {
-        panic!("Position and size exceed the bounds of the BitVec");
+        return BitVec::from_elem(size, false);
     }
 
     // Create a new BitVec to store the subset
@@ -53,16 +52,5 @@ pub fn increment_bitset(bitvec: &mut BitVec) {
     // If there is still a carry, add a new bit
     if carry {
         bitvec.push(true); // Add a new 1 bit at the end
-    }
-}
-
-pub fn inject_vec_into_bitset(bitvec: &mut BitVec, data: &Vec<u8>) {
-    for (byte_index, &byte) in data.iter().enumerate() {
-        for bit_index in 0..8 {
-            // Extract each bit (starting from the least significant bit)
-            let bit = (byte >> bit_index) & 1 == 1;
-            // Set the corresponding bit in the BitVec
-            bitvec.set((byte_index * 8) + bit_index, bit);
-        }
     }
 }

@@ -1,7 +1,5 @@
 use std::{
-    sync::{mpsc::Sender, Arc, Mutex},
-    thread::{self, JoinHandle},
-    time::Duration,
+    sync::{mpsc::Sender, Arc, Mutex}, thread::{self, JoinHandle}, time::Duration
 };
 
 pub struct Clock {
@@ -37,7 +35,6 @@ impl Clock {
             let interval = Duration::from_millis(1000 / frequency as u64);
 
             while *running.lock().unwrap() {
-                println!("####");
                 // Send a signal to the main thread
                 if tx.send(()).is_err() {
                     println!("Main thread disconnected. Clock thread exiting.");

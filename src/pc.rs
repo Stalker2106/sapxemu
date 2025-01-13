@@ -2,13 +2,13 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use bit_vec::BitVec;
 
-use crate::{bitvecutils::increment_bitset, bus::Bus, clock::ClockDriven, config::{OPCODE_SIZE, WORD_SIZE}, control::ControlLine, link::Link};
+use crate::{bitvecutils::increment_bitset, bus::Bus, clock::ClockDriven, config::{OPCODE_SIZE, WORD_SIZE}, control::control::ControlLine, link::Link};
 
 // Program Counter
 pub struct ProgramCounter {
     control_links: HashMap<ControlLine, Rc<RefCell<Link>>>,
     bus: Rc<RefCell<Bus>>,
-    address: BitVec,
+    pub address: BitVec,
 }
 
 impl<'a> ProgramCounter {

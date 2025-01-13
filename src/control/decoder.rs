@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bit_vec::BitVec;
 
-use crate::{config::OPCODE_SIZE, control::ControlLine, BinaryDisplay};
+use crate::{config::OPCODE_SIZE, control::control::ControlLine, BinaryDisplay};
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum OpCode {
@@ -44,12 +44,10 @@ impl Decoder {
                 match opcode {
                     OpCode::NOP => {
                         // NOP: No Operation
-                        println!("NOP: No operation performed");
                         return vec![];
                     }
                     OpCode::LDA => {
                         // LDA: Load A
-                        println!("LDA: Load A");
                         return vec![
                             vec![ControlLine::MI],
                             vec![ControlLine::RO, ControlLine::AI],
@@ -57,7 +55,6 @@ impl Decoder {
                     }
                     OpCode::ADD => {
                         // ADD: Add
-                        println!("ADD: Add");
                         return vec![
                             vec![ControlLine::MI],
                             vec![ControlLine::RO, ControlLine::BI],
@@ -66,7 +63,6 @@ impl Decoder {
                     }
                     OpCode::SUB => {
                         // SUB: Subtract
-                        println!("SUB: Subtract");
                         return vec![
                             vec![ControlLine::MI],
                             vec![ControlLine::RO, ControlLine::BI],
@@ -75,17 +71,14 @@ impl Decoder {
                     }
                     OpCode::MUL => {
                         // MUL: Multiply
-                        println!("MUL: Multiply");
                         return vec![];
                     }
                     OpCode::OUT => {
                         // OUT: Output
-                        println!("OUT: Output");
                         return vec![vec![ControlLine::AO, ControlLine::OI]];
                     }
                     OpCode::HLT => {
                         // HLT: Halt
-                        println!("HLT: Halt");
                         return vec![vec![ControlLine::HLT]];
                     }
                 }

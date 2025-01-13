@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 
+use crate::control::control::ControlLine;
+
 pub struct Link {
+    pub control: ControlLine,
     endpoints: HashMap<String, bool>,
     callbacks: Vec<Box<dyn Fn()>>
 }
 
 impl Link {
-    pub fn new() -> Self {
+    pub fn new(control: ControlLine) -> Self {
         Self {
+            control,
             endpoints: HashMap::new(),
             callbacks: Vec::new()
         }

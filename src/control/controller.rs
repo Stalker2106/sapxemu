@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use crate::{clock::ClockDriven, control::ControlLine, link::Link, sequencer::Sequencer};
+use crate::{clock::ClockDriven, control::{control::ControlLine, sequencer::Sequencer}, display::renderer, link::Link};
 
 // Controller
 pub struct Controller<'a> {
@@ -17,7 +17,6 @@ impl<'a> Controller<'a> {
         for (_line, link) in all_control_links {
             link.borrow_mut().add_endpoint("CONTROLLER".to_string());
         }
-        all_control_links[&ControlLine::HLT].borrow_mut().add_callback(Box::new(|| { std::process::exit(1); }));
         Self {
             sequencer,
             control_links: all_control_links

@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use crate::{control::ControlLine, decoder::Decoder, register::RWRegister};
+use crate::{control::control::ControlLine, control::decoder::Decoder, memory::register::RWRegister};
 
 
 // Sequencer
@@ -67,7 +67,6 @@ impl Sequencer {
         // Handle cycle end
         if self.microcode_step as usize >= (self.fetch_microcode.len() + self.instruction_microcode.len()) {
             self.microcode_step = 0;
-            println!("=====");
         }
     }
 }
