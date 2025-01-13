@@ -1,25 +1,22 @@
-SAP-X Emulator
+# SAP-X Emulator
 
 ![Window](media/window.png)
 
-A Rust-based emulator for the SAP architecture (Ben Eater's design), featuring configurable components like bus size, clock frequency, and more. It uses terminal capabilities to render a rich interface for an interactive and visually enhanced experience.
-Features
+A Rust-based emulator for the SAP-X architecture (Ben Eater's design), featuring configurable components. It uses terminal capabilities to render a rich interface for extended interoperability, and visualization.
 
-    Full SAP architecture emulation
-    Configurable bus size, clock frequency, memory, and CPU speed
-    Step-through instruction execution
-    Rich terminal-based interface for interactive visualization
-    Written in Rust for performance
+## Features
 
-Getting Started
+- Full SAP-X architecture emulation
+- Configurable bus size, clock frequency, memory size
+- Step-through instruction execution
+- Rich interactable interface
 
-To run the emulator, simply use Cargo. You can provide a bin file as the contents of the RAM for the program instance.
-Running the Emulator
+## Getting Started
 
-cargo run <optional RAM dump.bin>
+To run the emulator, simply use Cargo. You can provide (optionally) a bin file that will be injected in the RAM for the program instance.
 
-Terminal-based Interface
-
-The emulator renders the state of the SAP architecture using advanced terminal capabilities, providing a dynamic and visually interactive experience. You’ll be able to view components like registers, the bus, ALU, and memory in a rich format as the simulation runs. The interface allows for step-through execution and easy monitoring of the system's state.
-
-This updated README introduces the terminal rendering feature and highlights the interactive aspects of the emulator.
+    cargo run
+    
+    #or
+    
+    cargo run /path/to/ramdump.bin
