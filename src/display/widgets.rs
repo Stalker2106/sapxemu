@@ -1,6 +1,6 @@
 use ratatui::{buffer::Buffer, layout::Rect, style::{Color, Style}, symbols::border, text::{Line, Span, Text}, widgets::{Block, Paragraph, Widget, Wrap}};
 
-use crate::{alu::ALU, bus::Bus, config::WORD_SIZE, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter, BinaryDisplay};
+use crate::{alu::ALU, bus::Bus, config::WORD_SIZE, control::controller::Controller, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter, BinaryDisplay};
 
 impl Widget for &ProgramCounter {
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -117,6 +117,24 @@ impl Widget for &Bus {
         widgetlines.push(Line::from(vec![Span::styled(bindata.replace('0', "○").replace('1', "●"), Style::default().fg(Color::Yellow))]));
     
         Paragraph::new(widgetlines)
+            .centered()
+            .block(block)
+            .render(area, buf);
+    }
+}
+
+impl<'a> Widget for &'a Controller<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let title = Line::from(" Controller Sequencer ");
+        let block = Block::bordered()
+            .title(title.centered())
+            .border_set(border::THICK);
+
+        let body_text = Text::from(vec![Line::from(vec![
+            Span::raw(""), // Plain text span
+        ])]);
+
+        Paragraph::new(body_text)
             .centered()
             .block(block)
             .render(area, buf);

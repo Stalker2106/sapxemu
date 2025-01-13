@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, io::Stdout, rc::Rc};
 use crossterm::{execute, terminal::{self, disable_raw_mode, LeaveAlternateScreen}};
 use ratatui::{layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, Frame, Terminal};
 
-use crate::{alu::ALU, bus::Bus, control::control::ControlLine, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter};
+use crate::{alu::ALU, bus::Bus, control::{control::ControlLine, controller::{self, Controller}}, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter};
 
 const ICS_START_Y: u16 = 1;
 const ICS_HEIGHT: u16 = 4;
@@ -15,29 +15,76 @@ const BUS_WIDTH: u16 = 10;
 const RAM_WIDTH: u16 = 20;
 const RAM_HEIGHT: u16 = 40;
 
-fn render_left(frame: &mut Frame, left_inner_layout: Layout, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, mar: &Rc<RefCell<RORegister>>, ir: &Rc<RefCell<RWRegister>>) {
-    let mararea = Rect::new(SIGNAL_WIDTH, ICS_START_Y+((ICS_HEIGHT+ICS_Y_SPACING)*1), ICS_WIDTH, ICS_HEIGHT);
-    frame.render_widget(&*mar.borrow(), mararea);
-    let ramarea = Rect::new(SIGNAL_WIDTH, ICS_START_Y+((ICS_HEIGHT+ICS_Y_SPACING)*2), ICS_WIDTH, ICS_HEIGHT);
-    frame.render_widget(&*ir.borrow(), ramarea);
-    let irarea = Rect::new(SIGNAL_WIDTH, ICS_START_Y+((ICS_HEIGHT+ICS_Y_SPACING)*3), ICS_WIDTH, ICS_HEIGHT);
-    frame.render_widget(&*ir.borrow(), irarea);
+fn render_left(frame: &mut Frame, left_inner_layout: &Rc<[Rect]>, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, mar: &Rc<RefCell<RORegister>>, ir: &Rc<RefCell<RWRegister>>) {
+    let mar_layout = Layout::default()
+    .direction(Direction::Horizontal)
+    .constraints(vec![
+        Constraint::Percentage(10),
+        Constraint::Percentage(70),
+        Constraint::Percentage(20),
+    ])
+    .split(left_inner_layout[2]);
+    frame.render_widget(&*mar.borrow(), mar_layout[1]);
+    let ir_layout = Layout::default()
+    .direction(Direction::Horizontal)
+    .constraints(vec![
+        Constraint::Percentage(10),
+        Constraint::Percentage(70),
+        Constraint::Percentage(20),
+    ])
+    .split(left_inner_layout[6]);
+    frame.render_widget(&*ir.borrow(), ir_layout[1]);
 }
 
-fn render_right(frame: &mut Frame, right_inner_layout: Layout, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, pc: &ProgramCounter, reg_a: &Rc<RefCell<RWRegister>>, alu: &Rc<RefCell<ALU>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
-    let pcarea = Rect::new(SIGNAL_WIDTH+ICS_WIDTH+BUS_LINK_WIDTH+BUS_WIDTH+BUS_LINK_WIDTH, ICS_START_Y, ICS_WIDTH, ICS_HEIGHT);
-    frame.render_widget(pc, right_inner_layout[0]);
-    let regaarea = Rect::new(SIGNAL_WIDTH+ICS_WIDTH+BUS_LINK_WIDTH+BUS_WIDTH+BUS_LINK_WIDTH, ICS_START_Y+((ICS_HEIGHT+ICS_Y_SPACING)*1), ICS_WIDTH, ICS_HEIGHT);
-    frame.render_widget(&*reg_a.borrow(), regaarea);
-    let aluarea = Rect::new(SIGNAL_WIDTH+ICS_WIDTH+BUS_LINK_WIDTH+BUS_WIDTH+BUS_LINK_WIDTH, ICS_START_Y+((ICS_HEIGHT+ICS_Y_SPACING)*2), ICS_WIDTH, ICS_HEIGHT);
-    frame.render_widget(&*alu.borrow(), aluarea);
-    let regbarea = Rect::new(SIGNAL_WIDTH+ICS_WIDTH+BUS_LINK_WIDTH+BUS_WIDTH+BUS_LINK_WIDTH, ICS_START_Y+((ICS_HEIGHT+ICS_Y_SPACING)*3), ICS_WIDTH, ICS_HEIGHT);
-    frame.render_widget(&*reg_b.borrow(), regbarea);
-    let regoutarea = Rect::new(SIGNAL_WIDTH+ICS_WIDTH+BUS_LINK_WIDTH+BUS_WIDTH+BUS_LINK_WIDTH, ICS_START_Y+((ICS_HEIGHT+ICS_Y_SPACING)*4), ICS_WIDTH, ICS_HEIGHT);
-    frame.render_widget(reg_out, regoutarea);
+fn render_right(frame: &mut Frame, right_inner_layout: &Rc<[Rect]>, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, pc: &ProgramCounter, reg_a: &Rc<RefCell<RWRegister>>, alu: &Rc<RefCell<ALU>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
+    let pc_layout = Layout::default()
+    .direction(Direction::Horizontal)
+    .constraints(vec![
+        Constraint::Percentage(20),
+        Constraint::Percentage(70),
+        Constraint::Percentage(10),
+    ])
+    .split(right_inner_layout[0]);
+    frame.render_widget(pc, pc_layout[1]);
+    let reg_a_layout = Layout::default()
+    .direction(Direction::Horizontal)
+    .constraints(vec![
+        Constraint::Percentage(20),
+        Constraint::Percentage(70),
+        Constraint::Percentage(10),
+    ])
+    .split(right_inner_layout[2]);
+    frame.render_widget(&*reg_a.borrow(), reg_a_layout[1]);
+    let alu_layout = Layout::default()
+    .direction(Direction::Horizontal)
+    .constraints(vec![
+        Constraint::Percentage(20),
+        Constraint::Percentage(70),
+        Constraint::Percentage(10),
+    ])
+    .split(right_inner_layout[4]);
+    frame.render_widget(&*alu.borrow(), alu_layout[1]);
+    let reg_b_layout = Layout::default()
+    .direction(Direction::Horizontal)
+    .constraints(vec![
+        Constraint::Percentage(20),
+        Constraint::Percentage(70),
+        Constraint::Percentage(10),
+    ])
+    .split(right_inner_layout[6]);
+    frame.render_widget(&*reg_b.borrow(), reg_b_layout[1]);
+    let reg_out_layout = Layout::default()
+    .direction(Direction::Horizontal)
+    .constraints(vec![
+        Constraint::Percentage(20),
+        Constraint::Percentage(70),
+        Constraint::Percentage(10),
+    ])
+    .split(right_inner_layout[8]);
+    frame.render_widget(reg_out, reg_out_layout[1]);
 }
 
-fn render(frame: &mut Frame, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, alu: &Rc<RefCell<ALU>>, mar: &Rc<RefCell<RORegister>>, ram: &RAM, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
+fn render(frame: &mut Frame, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, controller: &Controller, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, alu: &Rc<RefCell<ALU>>, mar: &Rc<RefCell<RORegister>>, ram: &RAM, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
     let main_layout = Layout::default()
     .direction(Direction::Horizontal)
     .constraints(vec![
@@ -63,33 +110,48 @@ fn render(frame: &mut Frame, control_links: &HashMap<ControlLine, Rc<RefCell<Lin
     let left_inner_layout = Layout::default()
     .direction(Direction::Vertical)
     .constraints(vec![
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
+        Constraint::Percentage(16),
+        Constraint::Percentage(5),
+        Constraint::Percentage(16),
+        Constraint::Percentage(5),
+        Constraint::Percentage(16),
+        Constraint::Percentage(5),
+        Constraint::Percentage(16),
+        Constraint::Percentage(5),
+        Constraint::Percentage(16),
     ])
     .split(top_computer_layout[0]);
     let right_inner_layout = Layout::default()
     .direction(Direction::Vertical)
     .constraints(vec![
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
-        Constraint::Percentage(20),
+        Constraint::Percentage(16),
+        Constraint::Percentage(5),
+        Constraint::Percentage(16),
+        Constraint::Percentage(5),
+        Constraint::Percentage(16),
+        Constraint::Percentage(5),
+        Constraint::Percentage(16),
+        Constraint::Percentage(5),
+        Constraint::Percentage(16),
     ])
     .split(top_computer_layout[2]);
     // Left
-    render_left(frame, left_inner_layout, control_links, mar, ir);
+    render_left(frame, &left_inner_layout, control_links, mar, ir);
     // Bus
-    let busarea = Rect::new(SIGNAL_WIDTH+ICS_WIDTH+BUS_LINK_WIDTH, 0, BUS_WIDTH, ICS_START_Y+((ICS_HEIGHT+ICS_Y_SPACING)*4)+ICS_START_Y);
-    frame.render_widget(&*bus.borrow(), busarea);
+    frame.render_widget(&*bus.borrow(), top_computer_layout[1]);
     // Right
-    render_right(frame, control_links, pc, reg_a, alu, reg_b, reg_out);
+    render_right(frame, &right_inner_layout, control_links, pc, reg_a, alu, reg_b, reg_out);
     // RAM
-    let ramarea = Rect::new(SIGNAL_WIDTH+ICS_WIDTH+BUS_LINK_WIDTH+BUS_WIDTH+BUS_LINK_WIDTH+ICS_WIDTH+SIGNAL_WIDTH, 0, RAM_WIDTH, RAM_HEIGHT);
-    frame.render_widget(right_inner_layout, ram, ramarea);
+    frame.render_widget( ram, main_layout[1]);
+    // Controller
+    let controller_layout = Layout::default()
+    .direction(Direction::Vertical)
+    .constraints(vec![
+        Constraint::Percentage(30),
+        Constraint::Percentage(70),
+    ])
+    .split(computer_layout[1]);
+    frame.render_widget(controller, controller_layout[1]);
 }
 
 pub struct Renderer {
@@ -105,10 +167,10 @@ impl Renderer {
         return ren;
     }
 
-    pub fn draw(&mut self, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, alu: &Rc<RefCell<ALU>>, mar: &Rc<RefCell<RORegister>>, ram: &RAM, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
+    pub fn draw(&mut self, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, controller: &Controller, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, alu: &Rc<RefCell<ALU>>, mar: &Rc<RefCell<RORegister>>, ram: &RAM, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
         self.terminal.draw(|f| {
             // Pass required arguments to the render logic here
-            render(f, control_links, bus, pc, alu, mar, ram, ir, reg_a, reg_b, reg_out)
+            render(f, control_links, controller, bus, pc, alu, mar, ram, ir, reg_a, reg_b, reg_out)
         }).unwrap();
     }
 

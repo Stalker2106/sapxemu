@@ -198,7 +198,7 @@ fn main() {
                 reg_b.borrow_mut().on_clock_pulse();
                 reg_out.on_clock_pulse();
                 // Increment microcode step
-                renderer.borrow_mut().draw(&control_links, &bus, &pc, &alu, &mar, &ram, &ir, &reg_a, &reg_b, &reg_out);
+                renderer.borrow_mut().draw(&control_links, &controller, &bus, &pc, &alu, &mar, &ram, &ir, &reg_a, &reg_b, &reg_out);
                 sequencer.borrow_mut().increment_step(&ir);
             }
             Err(_) => {
