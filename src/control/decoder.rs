@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bit_vec::BitVec;
 
-use crate::{config::OPCODE_SIZE, control::control::ControlLine, BinaryDisplay};
+use crate::{bitvecutils::BinaryDisplay, config::OPCODE_SIZE, control::control::ControlLine};
 
 #[derive(PartialEq, Eq, Hash)]
 pub enum OpCode {

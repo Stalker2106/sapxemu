@@ -1,6 +1,6 @@
 use ratatui::{buffer::Buffer, layout::{Alignment, Constraint, Direction, Layout, Rect}, style::{Color, Style}, symbols::border, text::{Line, Span, Text}, widgets::{Block, Paragraph, Widget, Wrap}, Frame};
 
-use crate::{alu::ALU, bus::Bus, config::{OPCODE_SIZE, WORD_SIZE}, control::controller::Controller, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter, BinaryDisplay};
+use crate::{alu::ALU, bitvecutils::{bitvec_to_usize, BinaryDisplay}, bus::Bus, clock::Clock, config::{OPCODE_SIZE, WORD_SIZE}, control::controller::Controller, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter};
 
 impl Widget for &ProgramCounter {
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -10,7 +10,7 @@ impl Widget for &ProgramCounter {
             .border_set(border::THICK);
 
         let bindata = self.address.to_bin_string();
-        let decdata = self.address.iter().fold(0u32, |acc, bit| (acc << 1) | u32::from(bit));
+        let decdata = bitvec_to_usize(&self.address);
         let mut widgetlines = Vec::new();
         widgetlines.push(Line::from(vec![Span::styled(format!("{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
         widgetlines.push(Line::from(vec![Span::styled(bindata.replace('0', "◯").replace('1', "●"), Style::default().fg(Color::Yellow))]));
@@ -30,7 +30,7 @@ impl Widget for &RORegister {
             .border_set(border::THICK);
 
             let bindata = self.data.to_bin_string();
-            let decdata = self.data.iter().fold(0u32, |acc, bit| (acc << 1) | u32::from(bit));
+            let decdata = bitvec_to_usize(&self.data);
             let mut widgetlines = Vec::new();
             widgetlines.push(Line::from(vec![Span::styled(format!("{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
             widgetlines.push(Line::from(vec![Span::styled(bindata.replace('0', "◯").replace('1', "●"), Style::default().fg(Color::Yellow))]));
@@ -51,7 +51,7 @@ impl Widget for &RWRegister {
             .border_set(border::THICK);
 
         let bindata = self.data.to_bin_string();
-        let decdata = self.data.iter().fold(0u32, |acc, bit| (acc << 1) | u32::from(bit));
+        let decdata = bitvec_to_usize(&self.data);
         let mut widgetlines = Vec::new();
         widgetlines.push(Line::from(vec![Span::styled(format!("{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
         widgetlines.push(Line::from(vec![Span::styled(bindata.replace('0', "◯").replace('1', "●"), Style::default().fg(Color::Yellow))]));
@@ -81,6 +81,24 @@ impl Widget for &ALU {
     }
 }
 
+impl Widget for &Clock {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let title = Line::from(" Clock ");
+        let block = Block::bordered()
+            .title(title.centered())
+            .border_set(border::THICK);
+
+        let body_text = Text::from(vec![Line::from(vec![
+            Span::raw("TICK"), // Plain text span
+        ])]);
+
+        Paragraph::new(body_text)
+            .centered()
+            .block(block)
+            .render(area, buf);
+    }
+}
+
 impl Widget for &RAM {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let title = Line::from(" RAM Inspector ");
@@ -89,15 +107,27 @@ impl Widget for &RAM {
             .border_set(border::THICK);
 
         let mut lines = Vec::new();
+        lines.push(Line::from(vec![
+            Span::styled("ADDRESS|DATA", Style::default().fg(Color::White)),
+        ]));
         for addr in 0..self.memory.len() {
-            let line_color = if addr < (1 << (WORD_SIZE - OPCODE_SIZE)) {
+            let addr_color = if addr < (1 << (WORD_SIZE - OPCODE_SIZE)) {
+                if addr == bitvec_to_usize(&self.mar.borrow().read()) {
+                    Color::Red
+                } else {
+                    Color::White
+                }
+            } else {
+                Color::Gray
+            };
+            let data_color = if addr < (1 << (WORD_SIZE - OPCODE_SIZE)) {
                 Color::Yellow
             } else {
                 Color::Gray
             };
             lines.push(Line::from(vec![
-                Span::styled(format!("{:01$b}|", addr, WORD_SIZE), Style::default().fg(Color::White)),
-                Span::styled(self.memory[addr].to_bin_string(), Style::default().fg(line_color)),
+                Span::styled(format!("{:01$b}|", addr, WORD_SIZE), Style::default().fg(addr_color)),
+                Span::styled(self.memory[addr].to_bin_string(), Style::default().fg(data_color)),
             ]));
         }
 
@@ -118,7 +148,7 @@ impl Widget for &Bus {
             .border_set(border::THICK);
 
         let bindata = self.data.to_bin_string();
-        let decdata = self.data.iter().fold(0u32, |acc, bit| (acc << 1) | u32::from(bit));
+        let decdata = bitvec_to_usize(&self.data);
         let mut widgetlines = Vec::new();
         
         // Add the formatted lines for bus data
@@ -160,6 +190,7 @@ impl Widget for &Bus {
         paragraph.render(area, buf);
     }
 }
+
 impl<'a> Widget for &'a Controller<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let title = Line::from(" Controller Sequencer ");

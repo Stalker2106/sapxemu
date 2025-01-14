@@ -44,6 +44,18 @@ impl Clock {
             }
         }));
     }
+
+    pub fn stop(&mut self) {
+        // Set the running flag to false to stop the clock thread
+        if let Some(handle) = self.thread_handle.take() {
+            *self.running.lock().unwrap() = false;
+
+            // Wait for the clock thread to finish
+            handle.join().unwrap();
+        } else {
+            println!("Clock is not running.");
+        }
+    }
 }
 
 pub trait ClockDriven {

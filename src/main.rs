@@ -2,6 +2,7 @@ use std::{cell::RefCell, collections::HashMap, env, fs::File, io::Read, process,
 
 use alu::ALU;
 use bit_vec::BitVec;
+use bitvecutils::convert_ramdump_to_bitvec;
 use bus::{Bus, BusSelector};
 use clock::{Clock, ClockDriven};
 use config::{OPCODE_SIZE, WORD_SIZE};
@@ -26,31 +27,6 @@ mod pc;
 mod alu;
 mod link;
 mod events;
-
-pub trait BinaryDisplay {
-    fn to_bin_string(&self) -> String;
-}
-
-
-impl BinaryDisplay for BitVec {
-    fn to_bin_string(&self) -> String {
-        // Collect all bits into a string representation in correct order
-        self.iter()
-            .rev() // Reverse the order of bits before mapping
-            .map(|bit| if bit { '1' } else { '0' })
-            .collect()
-    }
-}
-
-fn print_state(control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, mar: &Rc<RefCell<RORegister>>, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
-    print!("Controls:");
-    for (control, link) in control_links {
-        if !link.borrow().get_state() { continue; }
-        print!(" {}:{}", control, link.borrow().get_state());
-    }
-    print!("\n");
-    println!("BUS: {} | PC: {} | MAR: {} | IR: {} | A: {} | B: {} | OUT: {}", bus.borrow().read().to_bin_string(), pc.read().to_bin_string(), mar.borrow().read().to_bin_string(), ir.borrow().read().to_bin_string(), reg_a.borrow().read().to_bin_string(), reg_b.borrow().read().to_bin_string(), reg_out.read().to_bin_string());
-}
 
 fn main() {
     // Parse command-line arguments
@@ -146,7 +122,7 @@ fn main() {
         &control_links
     )));
 
-    let mut ram = RAM::new(&control_links, Rc::clone(&bus), Rc::clone(&mar), &BitVec::from_bytes(&ramdump));
+    let mut ram = RAM::new(&control_links, Rc::clone(&bus), Rc::clone(&mar), &convert_ramdump_to_bitvec(&ramdump));
 
     let ir = Rc::new(RefCell::new(RWRegister::new(
         "Instruction Reg.".to_string(),
@@ -167,26 +143,25 @@ fn main() {
         &control_links
     );
 
-    let mut clock = Clock::new(1);
+    let clock = Rc::new(RefCell::new(Clock::new(1)));
     let sequencer = Rc::new(RefCell::new(Sequencer::new()));
     let mut controller = Controller::new(
         Rc::clone(&sequencer),
         &control_links
     );
     control_links[&ControlLine::HLT].borrow_mut().add_callback(Box::new({
-        let renderer = Rc::clone(&renderer); // Clone Rc to use it inside the closure
+        let clock = Rc::clone(&clock); // Clone Rc to use it inside the closure
         move || {
-            renderer.borrow_mut().stop();
-            std::process::exit(1);
+            clock.borrow_mut().stop();
         }
     }));
 
 
     // Run
     let (tx, rx) = mpsc::channel();
-    clock.start(tx);
+    clock.borrow_mut().start(tx);
     loop {
-        handle_keyboard(&control_links).unwrap();
+        handle_keyboard(&renderer, &control_links).unwrap();
         match rx.recv() {
             Ok(_) => {
                 controller.on_clock_pulse();
@@ -198,12 +173,11 @@ fn main() {
                 reg_b.borrow_mut().on_clock_pulse();
                 reg_out.on_clock_pulse();
                 // Increment microcode step
-                renderer.borrow_mut().draw(&control_links, &controller, &bus, &pc, &alu, &mar, &ram, &ir, &reg_a, &reg_b, &reg_out);
+                renderer.borrow_mut().draw(&clock, &control_links, &controller, &bus, &pc, &alu, &mar, &ram, &ir, &reg_a, &reg_b, &reg_out);
                 sequencer.borrow_mut().increment_step(&ir);
             }
             Err(_) => {
-                println!("Clock thread has stopped. Exiting main loop.");
-                break;
+                // CLK Stopped, do nothing.
             }
         }
     }

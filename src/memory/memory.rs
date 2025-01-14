@@ -9,7 +9,7 @@ pub struct RAM {
     control_links: HashMap<ControlLine, Rc<RefCell<Link>>>,
     bus: Rc<RefCell<Bus>>,
     pub memory: Vec<BitVec>,
-    mar: Rc<RefCell<RORegister>>,
+    pub mar: Rc<RefCell<RORegister>>,
 }
 
 impl RAM {
@@ -36,7 +36,7 @@ impl ClockDriven for RAM {
             // do something
         }
         if self.control_links[&ControlLine::RO].borrow().get_state() {
-            let index = bitvec_to_usize(&self.mar.borrow().read()) * WORD_SIZE;
+            let index = bitvec_to_usize(&self.mar.borrow().read());
             self.bus.borrow_mut().write(&self.memory[index]);
         }
     }

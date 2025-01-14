@@ -18,14 +18,14 @@ pub fn get_bitvec_subset(bitvec: &BitVec, position: usize, size: usize) -> BitVe
     subset
 }
 
-pub fn bitvec_to_usize(bitvec: &BitVec) -> usize {
+pub fn bitvec_to_usize(bitvec: &bit_vec::BitVec) -> usize {
     let mut value = 0usize;
 
-    // Iterate over the bits in the BitVec
+    // Iterate over the bits in the BitVec and ensure correct alignment (Little Endian)
     for (index, bit) in bitvec.iter().enumerate() {
-        // If the bit is set, add the corresponding power of 2
+        // Shift the bit by its index position (bit position).
         if bit {
-            value |= 1 << index; // Set the bit at the current index
+            value |= 1 << index; // Set the bit at position `index` if `bit` is `true`.
         }
     }
 
@@ -52,5 +52,46 @@ pub fn increment_bitset(bitvec: &mut BitVec) {
     // If there is still a carry, reset
     if carry {
         *bitvec = BitVec::from_elem(bitvec.len(), false);
+    }
+}
+
+pub fn reverse_bits_in_byte(byte: u8) -> u8 {
+    let mut reversed = 0u8;
+    for i in 0..8 {
+        if byte & (1 << i) != 0 {
+            reversed |= 1 << (7 - i); // Reverse bit position
+        }
+    }
+    reversed
+}
+
+pub fn convert_ramdump_to_bitvec(ramdump: &Vec<u8>) -> BitVec {
+    let mut bitvec = BitVec::new();
+
+    // Iterate through each byte in the ramdump and reverse its bits
+    for byte in ramdump {
+        let reversed_byte = reverse_bits_in_byte(*byte);
+        
+        // Now, push each bit of the reversed byte into the BitVec
+        for i in 0..8 {
+            bitvec.push((reversed_byte & (1 << (7 - i))) != 0);
+        }
+    }
+
+    bitvec
+}
+
+pub trait BinaryDisplay {
+    fn to_bin_string(&self) -> String;
+}
+
+
+impl BinaryDisplay for BitVec {
+    fn to_bin_string(&self) -> String {
+        // Collect all bits into a string representation in correct order
+        self.iter()
+            .rev() // Reverse the order of bits before mapping
+            .map(|bit| if bit { '1' } else { '0' })
+            .collect()
     }
 }

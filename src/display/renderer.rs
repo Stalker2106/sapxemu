@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, io::Stdout, rc::Rc};
 use crossterm::{execute, terminal::{disable_raw_mode, LeaveAlternateScreen}};
 use ratatui::{layout::{Constraint, Direction, Layout, Rect}, prelude::CrosstermBackend, Frame, Terminal};
 
-use crate::{alu::ALU, bus::Bus, control::{control::ControlLine, controller::Controller}, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter};
+use crate::{alu::ALU, bus::Bus, clock::Clock, control::{control::ControlLine, controller::Controller}, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter};
 
 use super::widgets::{render_bus_connection, render_h_link, BusConnection};
 
@@ -132,7 +132,7 @@ fn render_right(frame: &mut Frame, right_inner_layout: &Rc<[Rect]>, control_link
     render_bus_connection(frame, BusConnection::Right, control_links[&ControlLine::OI].borrow().get_state(),reg_out_layout[0]);
 }
 
-fn render(frame: &mut Frame, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, controller: &Controller, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, alu: &Rc<RefCell<ALU>>, mar: &Rc<RefCell<RORegister>>, ram: &RAM, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
+fn render(frame: &mut Frame, clock: &Rc<RefCell<Clock>>, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, controller: &Controller, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, alu: &Rc<RefCell<ALU>>, mar: &Rc<RefCell<RORegister>>, ram: &RAM, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
     let main_layout = Layout::default()
     .direction(Direction::Horizontal)
     .constraints(vec![
@@ -140,6 +140,13 @@ fn render(frame: &mut Frame, control_links: &HashMap<ControlLine, Rc<RefCell<Lin
         Constraint::Percentage(25),
     ])
     .split(frame.area());
+    let inspector_layout = Layout::default()
+    .direction(Direction::Vertical)
+    .constraints(vec![
+        Constraint::Percentage(75),
+        Constraint::Percentage(25),
+    ])
+    .split(main_layout[1]);
     let computer_layout = Layout::default()
     .direction(Direction::Vertical)
     .constraints(vec![
@@ -189,8 +196,9 @@ fn render(frame: &mut Frame, control_links: &HashMap<ControlLine, Rc<RefCell<Lin
     frame.render_widget(&*bus.borrow(), top_computer_layout[1]);
     // Right
     render_right(frame, &right_inner_layout, control_links, pc, reg_a, alu, reg_b, reg_out);
-    // RAM
-    frame.render_widget( ram, main_layout[1]);
+    // Inspector
+    frame.render_widget( ram, inspector_layout[0]);
+    frame.render_widget( &*clock.borrow(), inspector_layout[1]);
     // Controller
     let controller_layout = Layout::default()
     .direction(Direction::Vertical)
@@ -215,10 +223,10 @@ impl Renderer {
         return ren;
     }
 
-    pub fn draw(&mut self, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, controller: &Controller, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, alu: &Rc<RefCell<ALU>>, mar: &Rc<RefCell<RORegister>>, ram: &RAM, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
+    pub fn draw(&mut self, clock: &Rc<RefCell<Clock>>, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, controller: &Controller, bus: &Rc<RefCell<Bus>>, pc: &ProgramCounter, alu: &Rc<RefCell<ALU>>, mar: &Rc<RefCell<RORegister>>, ram: &RAM, ir: &Rc<RefCell<RWRegister>>, reg_a: &Rc<RefCell<RWRegister>>, reg_b: &Rc<RefCell<RWRegister>>, reg_out: &RORegister) {
         self.terminal.draw(|f| {
             // Pass required arguments to the render logic here
-            render(f, control_links, controller, bus, pc, alu, mar, ram, ir, reg_a, reg_b, reg_out)
+            render(f, clock, control_links, controller, bus, pc, alu, mar, ram, ir, reg_a, reg_b, reg_out)
         }).unwrap();
     }
 
