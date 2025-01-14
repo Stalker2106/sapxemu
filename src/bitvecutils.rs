@@ -49,8 +49,8 @@ pub fn increment_bitset(bitvec: &mut BitVec) {
         }
     }
 
-    // If there is still a carry, add a new bit
+    // If there is still a carry, reset
     if carry {
-        bitvec.push(true); // Add a new 1 bit at the end
+        *bitvec = BitVec::from_elem(bitvec.len(), false);
     }
 }

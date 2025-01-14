@@ -6,7 +6,7 @@ use crate::{clock::ClockDriven, control::{control::ControlLine, sequencer::Seque
 pub struct Controller<'a> {
     sequencer: Rc<RefCell<Sequencer>>,
     // Links
-    control_links: &'a HashMap<ControlLine, Rc<RefCell<Link>>>
+    pub control_links: &'a HashMap<ControlLine, Rc<RefCell<Link>>>
 }
 
 impl<'a> Controller<'a> {
