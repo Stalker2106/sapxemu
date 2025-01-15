@@ -27,20 +27,16 @@ fn sum_bitvecs(a: &BitVec, b: &BitVec) -> BitVec {
 }
 
 pub struct ALU {
-    endpoints: HashMap<ControlLine, Rc<RefCell<Link>>>,
+    control_links: HashMap<ControlLine, Rc<RefCell<Link>>>,
     bus: Rc<RefCell<Bus>>,
     reg_a: Rc<RefCell<RWRegister>>,
     reg_b: Rc<RefCell<RWRegister>>,
 }
 
 impl ALU {
-    pub fn new(all_control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, bus: Rc<RefCell<Bus>>, reg_a: Rc<RefCell<RWRegister>>, reg_b: Rc<RefCell<RWRegister>>) -> Self {
-        let mut control_eps = HashMap::new();
-        control_eps.insert(ControlLine::EO, Rc::clone(&all_control_links[&ControlLine::EO]));
-        control_eps.insert(ControlLine::SU, Rc::clone(&all_control_links[&ControlLine::SU]));
-        //control_eps.insert(ControlLine::CY, false);
+    pub fn new(control_links: HashMap<ControlLine, Rc<RefCell<Link>>>, bus: Rc<RefCell<Bus>>, reg_a: Rc<RefCell<RWRegister>>, reg_b: Rc<RefCell<RWRegister>>) -> Self {
         Self {
-            endpoints: control_eps,
+            control_links,
             bus,
             reg_a,
             reg_b

@@ -3,6 +3,8 @@ use std::fmt;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum ControlLine {
+    /// Clock
+    CLK,
     /// Halt the computer.
     HLT,
     /// Load address into MAR.
@@ -42,6 +44,7 @@ pub enum ControlLine {
 impl fmt::Display for ControlLine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let s = match self {
+            ControlLine::CLK => "CLK",
             ControlLine::HLT => "HLT",
             ControlLine::MI => "MI",
             ControlLine::RI => "RI",

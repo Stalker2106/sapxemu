@@ -6,19 +6,15 @@ use crate::{bitvecutils::increment_bitset, bus::Bus, clock::ClockDriven, config:
 
 // Program Counter
 pub struct ProgramCounter {
-    control_links: HashMap<ControlLine, Rc<RefCell<Link>>>,
+    control_links: HashMap<ControlLine, Rc<RefCell<Link>>>, 
     bus: Rc<RefCell<Bus>>,
     pub address: BitVec,
 }
 
 impl<'a> ProgramCounter {
-    pub fn new(all_control_links: &'a HashMap<ControlLine, Rc<RefCell<Link>>>, bus: Rc<RefCell<Bus>>) -> Self {
-        let mut control_eps = HashMap::new();
-        control_eps.insert(ControlLine::CO, Rc::clone(&all_control_links[&ControlLine::CO]));
-        control_eps.insert(ControlLine::J, Rc::clone(&all_control_links[&ControlLine::J]));
-        control_eps.insert(ControlLine::CE, Rc::clone(&all_control_links[&ControlLine::CE]));
+    pub fn new(control_links: HashMap<ControlLine, Rc<RefCell<Link>>>,  bus: Rc<RefCell<Bus>>) -> Self {
         Self {
-            control_links: control_eps,
+            control_links,
             bus,
             address: BitVec::from_elem(WORD_SIZE - OPCODE_SIZE, false)
         }
@@ -30,7 +26,7 @@ impl<'a> ProgramCounter {
 }
 
 impl ClockDriven for ProgramCounter {
-    fn on_clock_pulse(&mut self) {
+    fn on_clock_high(&mut self) {
         if self.control_links[&ControlLine::CO].borrow().get_state() {
             self.bus.borrow_mut().write(&self.address);
         }

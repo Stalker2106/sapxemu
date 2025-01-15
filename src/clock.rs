@@ -17,7 +17,7 @@ impl Clock {
         }
     }
 
-    pub fn start(&mut self, tx: Sender<()>) {
+    pub fn start(&mut self, tx: Sender<bool>) {
         let running = Arc::clone(&self.running);
         let frequency = self.frequency;
 
@@ -32,15 +32,20 @@ impl Clock {
 
         // Spawn the clock thread
         self.thread_handle = Some(thread::spawn(move || {
-            let interval = Duration::from_millis(1000 / frequency as u64);
+            let half_interval = Duration::from_millis((1000 / frequency as u64) / 2);
 
             while *running.lock().unwrap() {
                 // Send a signal to the main thread
-                if tx.send(()).is_err() {
+                if tx.send(true).is_err() {
                     println!("Main thread disconnected. Clock thread exiting.");
                     break;
                 }
-                thread::sleep(interval);
+                thread::sleep(half_interval);
+                if tx.send(false).is_err() {
+                    println!("Main thread disconnected. Clock thread exiting.");
+                    break;
+                }
+                thread::sleep(half_interval);
             }
         }));
     }
@@ -59,5 +64,5 @@ impl Clock {
 }
 
 pub trait ClockDriven {
-    fn on_clock_pulse(&mut self);
+    fn on_clock_high(&mut self);
 }

@@ -3,23 +3,23 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 use crate::{clock::ClockDriven, control::{control::ControlLine, sequencer::Sequencer}, display::renderer, link::Link};
 
 // Controller
-pub struct Controller<'a> {
+pub struct Controller {
     sequencer: Rc<RefCell<Sequencer>>,
     // Links
-    pub control_links: &'a HashMap<ControlLine, Rc<RefCell<Link>>>
+    pub control_links: HashMap<ControlLine, Rc<RefCell<Link>>>
 }
 
-impl<'a> Controller<'a> {
+impl Controller {
     pub fn new(
-        sequencer: Rc<RefCell<Sequencer>>,
-        all_control_links: &'a HashMap<ControlLine, Rc<RefCell<Link>>>
+        control_links: HashMap<ControlLine, Rc<RefCell<Link>>>,
+        sequencer: Rc<RefCell<Sequencer>>
     ) -> Self {
-        for (_line, link) in all_control_links {
+        for (_line, link) in &control_links {
             link.borrow_mut().add_endpoint("CONTROLLER".to_string());
         }
         Self {
             sequencer,
-            control_links: all_control_links
+            control_links
         }
     }
 
@@ -28,13 +28,16 @@ impl<'a> Controller<'a> {
             self.control_links[&control].borrow_mut().set_endpoint("CONTROLLER".to_string(), state);
         }
     }
+
+    pub fn on_clock_low(&mut self) {
+        // drive all current signals low
+        let step_controls = self.sequencer.borrow().get_current_step_controls();
+        self.drive_step_controls(step_controls, false);
+    }
 }
 
-impl<'a> ClockDriven for Controller<'a> {
-    fn on_clock_pulse(&mut self) {
-        // Drive Prev step controls low
-        let prev_step_controls = self.sequencer.borrow().get_prev_step_controls();
-        self.drive_step_controls(prev_step_controls, false);
+impl ClockDriven for Controller {
+    fn on_clock_high(&mut self) {
         // Run current step
         let step_controls = self.sequencer.borrow().get_current_step_controls();
         self.drive_step_controls(step_controls, true);

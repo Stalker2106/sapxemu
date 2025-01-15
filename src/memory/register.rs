@@ -15,11 +15,9 @@ pub struct RORegister {
 }
 
 impl RORegister {
-    pub fn new(name: String, size: usize, bus: Rc<RefCell<Bus>>, bus_selector: BusSelector, regin_ctrl: ControlLine, all_control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>) -> Self {
-        let mut control_eps = HashMap::new();
-        control_eps.insert(regin_ctrl.clone(), Rc::clone(&all_control_links[&regin_ctrl]));
+    pub fn new(name: String, size: usize, bus: Rc<RefCell<Bus>>, bus_selector: BusSelector, regin_ctrl: ControlLine, control_links: HashMap<ControlLine, Rc<RefCell<Link>>>) -> Self {
         Self {
-            control_links: control_eps,
+            control_links,
             name,
             bus,
             bus_selector,
@@ -34,7 +32,7 @@ impl RORegister {
 }
 
 impl ClockDriven for RORegister {
-    fn on_clock_pulse(&mut self) {
+    fn on_clock_high(&mut self) {
         if self.control_links[&self.regin_ctrl].borrow().get_state() {
             self.data = self.bus.borrow().read_part(self.data.len(), self.bus_selector);
         }
@@ -53,12 +51,9 @@ pub struct RWRegister {
 }
 
 impl RWRegister {
-    pub fn new(name: String, size: usize, bus: Rc<RefCell<Bus>>, bus_selector: BusSelector, regin_ctrl: ControlLine, regout_ctrl: ControlLine, all_control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>) -> Self {
-        let mut control_eps = HashMap::new();
-        control_eps.insert(regin_ctrl.clone(), Rc::clone(&all_control_links[&regin_ctrl]));
-        control_eps.insert(regout_ctrl.clone(), Rc::clone(&all_control_links[&regout_ctrl]));
+    pub fn new(name: String, size: usize, bus: Rc<RefCell<Bus>>, bus_selector: BusSelector, regin_ctrl: ControlLine, regout_ctrl: ControlLine, control_links: HashMap<ControlLine, Rc<RefCell<Link>>>) -> Self {
         Self {
-            control_links: control_eps,
+            control_links,
             name,
             bus,
             bus_selector,
@@ -74,7 +69,7 @@ impl RWRegister {
 }
 
 impl ClockDriven for RWRegister {
-    fn on_clock_pulse(&mut self) {
+    fn on_clock_high(&mut self) {
         if self.control_links[&self.regin_ctrl].borrow().get_state() {
             self.data = self.bus.borrow().read_part(self.data.len(), self.bus_selector);
         }

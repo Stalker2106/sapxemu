@@ -1,6 +1,8 @@
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
+
 use ratatui::{buffer::Buffer, layout::{Alignment, Constraint, Direction, Layout, Rect}, style::{Color, Style}, symbols::border, text::{Line, Span, Text}, widgets::{Block, Paragraph, Widget, Wrap}, Frame};
 
-use crate::{alu::ALU, bitvecutils::{bitvec_to_usize, BinaryDisplay}, bus::Bus, clock::Clock, config::{OPCODE_SIZE, WORD_SIZE}, control::controller::Controller, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter};
+use crate::{alu::ALU, bitvecutils::{bitvec_to_usize, BinaryDisplay}, bus::Bus, clock::Clock, config::{OPCODE_SIZE, WORD_SIZE}, control::{control::ControlLine, controller::Controller}, link::Link, memory::{memory::RAM, register::{RORegister, RWRegister}}, pc::ProgramCounter};
 
 impl Widget for &ProgramCounter {
     fn render(self, area: Rect, buf: &mut Buffer) {
@@ -12,7 +14,7 @@ impl Widget for &ProgramCounter {
         let bindata = self.address.to_bin_string();
         let decdata = bitvec_to_usize(&self.address);
         let mut widgetlines = Vec::new();
-        widgetlines.push(Line::from(vec![Span::styled(format!("{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
+        widgetlines.push(Line::from(vec![Span::styled(format!("0x{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
         widgetlines.push(Line::from(vec![Span::styled(bindata.replace('0', "◯").replace('1', "●"), Style::default().fg(Color::Yellow))]));
 
         Paragraph::new(widgetlines)
@@ -32,7 +34,7 @@ impl Widget for &RORegister {
             let bindata = self.data.to_bin_string();
             let decdata = bitvec_to_usize(&self.data);
             let mut widgetlines = Vec::new();
-            widgetlines.push(Line::from(vec![Span::styled(format!("{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
+            widgetlines.push(Line::from(vec![Span::styled(format!("0x{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
             widgetlines.push(Line::from(vec![Span::styled(bindata.replace('0', "◯").replace('1', "●"), Style::default().fg(Color::Yellow))]));
     
 
@@ -53,7 +55,7 @@ impl Widget for &RWRegister {
         let bindata = self.data.to_bin_string();
         let decdata = bitvec_to_usize(&self.data);
         let mut widgetlines = Vec::new();
-        widgetlines.push(Line::from(vec![Span::styled(format!("{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
+        widgetlines.push(Line::from(vec![Span::styled(format!("0x{:X} | {} | {}", decdata, bindata.clone(), decdata), Style::default().fg(Color::Yellow))]));
         widgetlines.push(Line::from(vec![Span::styled(bindata.replace('0', "◯").replace('1', "●"), Style::default().fg(Color::Yellow))]));
 
         Paragraph::new(widgetlines)
@@ -101,41 +103,59 @@ impl Widget for &Clock {
 
 impl Widget for &RAM {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let title = Line::from(" RAM Inspector ");
+        let title = Line::from(" RAM ");
         let block = Block::bordered()
             .title(title.centered())
             .border_set(border::THICK);
 
-        let mut lines = Vec::new();
-        lines.push(Line::from(vec![
-            Span::styled("ADDRESS|DATA", Style::default().fg(Color::White)),
-        ]));
-        for addr in 0..self.memory.len() {
-            let addr_color = if addr < (1 << (WORD_SIZE - OPCODE_SIZE)) {
-                if addr == bitvec_to_usize(&self.mar.borrow().read()) {
-                    Color::Red
-                } else {
-                    Color::White
-                }
-            } else {
-                Color::Gray
-            };
-            let data_color = if addr < (1 << (WORD_SIZE - OPCODE_SIZE)) {
-                Color::Yellow
-            } else {
-                Color::Gray
-            };
-            lines.push(Line::from(vec![
-                Span::styled(format!("{:01$b}|", addr, WORD_SIZE), Style::default().fg(addr_color)),
-                Span::styled(self.memory[addr].to_bin_string(), Style::default().fg(data_color)),
-            ]));
-        }
+        let body_text = Text::from(vec![Line::from(vec![
+            Span::raw(""), // Plain text span
+        ])]);
 
-        Paragraph::new(lines)
-            .wrap(Wrap { trim: true })
+        Paragraph::new(body_text)
+            .centered()
             .block(block)
             .render(area, buf);
     }
+}
+
+pub fn render_ram_inspector(frame: &mut Frame, ram: &RAM, area: Rect) {
+    let title = Line::from(" RAM Inspector ");
+    let block = Block::bordered()
+        .title(title.centered())
+        .border_set(border::THICK);
+
+    let mut lines = Vec::new();
+    lines.push(Line::from(vec![
+        Span::styled("ADDRESS|DATA", Style::default().fg(Color::White)),
+    ]));
+    for addr in 0..ram.memory.len() {
+        let addr_color = if addr < (1 << (WORD_SIZE - OPCODE_SIZE)) {
+            if addr == bitvec_to_usize(&ram.mar.borrow().read()) {
+                Color::Red
+            } else {
+                Color::White
+            }
+        } else {
+            Color::Gray
+        };
+        let data_color = if addr < (1 << (WORD_SIZE - OPCODE_SIZE)) {
+            Color::Yellow
+        } else {
+            Color::Gray
+        };
+        lines.push(Line::from(vec![
+            Span::styled(format!("{:01$b}|", addr, WORD_SIZE), Style::default().fg(addr_color)),
+            Span::styled(ram.memory[addr].to_bin_string(), Style::default().fg(data_color)),
+        ]));
+    }
+
+    frame.render_widget(
+ Paragraph::new(lines)
+        .wrap(Wrap { trim: true })
+        .block(block),
+        area
+    );
 }
 
 impl Widget for &Bus {
@@ -153,7 +173,7 @@ impl Widget for &Bus {
         
         // Add the formatted lines for bus data
         widgetlines.push(Line::from(vec![Span::styled(
-            format!("{:X} | {} | {}", decdata, bindata.clone(), decdata),
+            format!("0x{:X} | {} | {}", decdata, bindata.clone(), decdata),
             Style::default().fg(Color::Yellow),
         )]));
         widgetlines.push(Line::from(vec![Span::styled(
@@ -191,7 +211,7 @@ impl Widget for &Bus {
     }
 }
 
-impl<'a> Widget for &'a Controller<'a> {
+impl Widget for &Controller {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let title = Line::from(" Controller Sequencer ");
         let block = Block::bordered()
@@ -202,51 +222,53 @@ impl<'a> Widget for &'a Controller<'a> {
         Paragraph::new(vec![Line::from("")]) // Empty body text for the block
             .block(block)
             .render(area, buf);
+    }
+}
 
-        // Define the remaining area for controls (subtracting space for the block)
-        let control_area = Rect {
-            x: area.x,
-            y: area.y + 3, // Leave some space for the block
-            width: area.width,
-            height: area.height - 3, // Adjust height accordingly
-        };
+pub fn render_all_links(frame: &mut Frame, control_links: &HashMap<ControlLine, Rc<RefCell<Link>>>, area: Rect) {
+    let controls = control_links.keys().collect::<Vec<_>>();
+    let num_controls = controls.len() as u16;
 
-        // Get the controls and calculate the percentage for each one
-        let controls = self.control_links.keys().collect::<Vec<_>>();
-        let num_controls = controls.len() as u16;
-        let percentage_per_control = 100 / num_controls;
+    // Guard against division by zero
+    if num_controls == 0 {
+        return;
+    }
 
-        // Dynamically generate constraints based on the number of controls
-        let constraints = (0..num_controls)
-            .map(|_| Constraint::Percentage(percentage_per_control))
-            .collect::<Vec<_>>();
+    // Calculate the percentage for each control
+    let percentage_per_control = 100 / num_controls;
 
-        // Define the layout for controls within the remaining area
-        let link_layout = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints(constraints)
-            .split(control_area);
+    // Dynamically generate constraints for layout
+    let constraints = (0..num_controls)
+        .map(|_| Constraint::Percentage(percentage_per_control))
+        .collect::<Vec<_>>();
 
-        // Render controls in the layout
-        for (i, key) in controls.iter().enumerate() {
-            if let Some(link) = self.control_links.get(*key) {
-                let link = link.borrow(); // Borrow the Link instance
-                let color = if link.get_state() {
-                    Color::Yellow
-                } else {
-                    Color::White
-                };
+    // Split the available space horizontally for links
+    let link_layout = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(constraints)
+        .horizontal_margin(2) // Add horizontal margin for centering
+        .split(area);
 
-                let body_text = Text::from(vec![
-                    Line::from(Span::styled(
-                        format!("{}", link.control),
-                        Style::default().fg(color),
-                    )),
-                ]);
+    // Render each control in its respective layout cell
+    for (i, key) in controls.iter().enumerate() {
+        if let Some(link) = control_links.get(*key) {
+            let link = link.borrow(); // Borrow the Link instance
+            let color = if link.get_state() {
+                Color::Yellow
+            } else {
+                Color::White
+            };
 
-                // Render the paragraph inside the layout cell
-                Paragraph::new(body_text).render(link_layout[i], buf);
-            }
+            let body_text = Text::from(vec![
+                Line::from(Span::styled(format!("{}", link.control), Style::default().fg(color))),
+                Line::from(Span::styled("|", Style::default().fg(color))),
+            ]);
+
+            // Render the paragraph inside the layout cell
+            frame.render_widget(
+                Paragraph::new(body_text).alignment(Alignment::Center), // Center the text within the widget
+                link_layout[i],
+            );
         }
     }
 }
@@ -331,4 +353,49 @@ pub fn render_bus_connection(frame: &mut Frame, connection: BusConnection, state
     // Create the text and render the widget
     let text = Text::from(lines);
     frame.render_widget(Paragraph::new(text), area);
+}
+
+pub enum ICConnection {
+    Up,
+    Down,
+    Both
+}
+
+pub fn render_ic_connection(frame: &mut Frame, connection: ICConnection, state: bool, area: Rect) {
+    // Define the layout constraints (20% left, 70% center, 10% right)
+    let constraints = vec![
+        Constraint::Percentage(20), // 20% for the left margin
+        Constraint::Percentage(70), // 70% for the main content area
+        Constraint::Percentage(10), // 10% for the right margin
+    ];
+
+    // Split the area based on the constraints
+    let layout = Layout::default()
+        .direction(Direction::Horizontal) // Horizontal layout (left to right)
+        .constraints(constraints)         // Apply the defined constraints
+        .split(area);                     // Split the given area
+
+    // Determine the pattern based on connection type
+    let pattern = match connection {
+        ICConnection::Up => vec!["██", "██"],
+        ICConnection::Down => vec!["██", "██"],
+        ICConnection::Both => vec!["██", "██"],
+    };
+
+    // Choose the color based on the state
+    let color = if state {
+        Color::Yellow
+    } else {
+        Color::Gray
+    };
+
+    // Convert the pattern into styled lines
+    let lines: Vec<Line> = pattern
+        .into_iter()
+        .map(|symbol| Line::from(Span::styled(symbol, Style::default().fg(color))))
+        .collect();
+
+    // Create the text and render the widget in the 70% area
+    let text = Text::from(lines);
+    frame.render_widget(Paragraph::new(text).alignment(Alignment::Center), layout[1]); // layout[1] corresponds to the 70% area
 }
